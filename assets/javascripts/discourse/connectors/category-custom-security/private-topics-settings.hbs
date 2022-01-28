@@ -1,0 +1,23 @@
+{{#if siteSettings.private_topics_enabled}}
+  <section>
+    <h3>Private Topics</h3>
+  </section>
+  <section class="field category_private_topics_enabled">
+    <label>
+      {{input 
+        type="checkbox" 
+        checked=(readonly category.private_topics_enabled)
+        change=(action "onChangeSetting" value="target.checked")
+      }}
+      {{i18n "category.private_topics_enabled"}}
+    </label>
+  </section>
+  {{#if category.private_topics_enabled}}
+    <section class="field">
+      <label>
+        Groups that are allowed to see all topics:
+        {{group-selector groupNames=category.custom_fields.private_topics_allowed_groups groupFinder=groupFinder classNames="privateTopicsAllowedGroups"}}
+      </label>
+    </section>
+  {{/if}}
+{{/if}}

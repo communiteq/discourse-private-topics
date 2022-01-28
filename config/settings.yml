@@ -1,0 +1,4 @@
+plugins:
+  private_topics_enabled:
+    client: true
+    default: false
