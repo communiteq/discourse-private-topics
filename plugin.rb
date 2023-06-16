@@ -37,44 +37,65 @@ module ::DiscoursePrivateTopics
 end
 
 after_initialize do
-    # hide posts from search results
-    module PrivateTopicsPatchSearch
-      def execute(readonly_mode: @readonly_mode)
-        super
+  # hide topics from search results
+  module PrivateTopicsPatchSearch
+    def execute(readonly_mode: @readonly_mode)
+      super
 
+      if SiteSetting.private_topics_enabled
+        cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(@guardian.user)
+        unless cat_ids.empty?
+          @results.posts.delete_if do |post|
+            next false if post&.user&.id == @guardian.user&.id
+            post&.topic&.category&.id && cat_ids.include?(post.topic.category&.id)
+          end
+        end
+      end
+
+      @results
+    end
+  end
+
+  # hide topics on from post stream and raw
+  module ::TopicGuardian
+    alias_method :org_can_see_topic?, :can_see_topic?
+
+    def can_see_topic?(topic, hide_deleted = true)
+      allowed = org_can_see_topic?(topic, hide_deleted)
+      return false unless allowed # false stays false
+
+      if SiteSetting.private_topics_enabled
+        return true unless topic&.category # skip for PM's
+        return true if @user && !@user.anonymous? && topic&.user&.id == @user&.id # topic authors are always good
+        cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(@user)
+        return true if cat_ids.empty?
+
+        return false if cat_ids.include?(topic.category&.id)
+      end
+
+      true
+    end
+  end
+
+  # hide topics from user profile -> activity
+  class ::UserAction
+    module PrivateTopicsApplyCommonFilters
+      def apply_common_filters(builder, user_id, guardian, ignore_private_messages=false)
         if SiteSetting.private_topics_enabled
-          cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(@guardian.user)
+          cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(guardian.user).join(",")
           unless cat_ids.empty?
-            @results.posts.delete_if do |post|
-              next false if post&.user&.id == @guardian.user&.id
-              post&.topic&.category&.id && cat_ids.include?(post.topic.category&.id)
+            if guardian.user
+              builder.where("(t.category_id NOT IN (#{cat_ids}) OR p.user_id = #{guardian&.user&.id})")
+            else
+              builder.where("t.category_id NOT IN (#{cat_ids})")
             end
           end
         end
-
-        @results
+        super(builder, user_id, guardian, ignore_private_messages)
       end
     end
-
-    module ::TopicGuardian
-      alias_method :org_can_see_topic?, :can_see_topic?
-
-      def can_see_topic?(topic, hide_deleted = true)
-        allowed = org_can_see_topic?(topic, hide_deleted)
-        return false unless allowed # false stays false
-
-        if SiteSetting.private_topics_enabled
-          return true unless topic&.category # skip for PM's
-          return true if @user && !@user.anonymous? && topic&.user&.id == @user&.id # topic authors are always good
-          cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(@user)
-          return true if cat_ids.empty?
-
-          return false if cat_ids.include?(topic.category&.id)
-        end
-
-        true
-      end
-    end
+    singleton_class.prepend PrivateTopicsApplyCommonFilters
+  end
 
   Site.preloaded_category_custom_fields << 'private_topics_enabled'
   Site.preloaded_category_custom_fields << 'private_topics_allowed_groups'
@@ -83,6 +104,7 @@ after_initialize do
     prepend PrivateTopicsPatchSearch
   end
 
+  # hide topics from topic lists
   TopicQuery.add_custom_filter(:private_topics) do |result, query|
     if SiteSetting.private_topics_enabled
       cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(query&.user).join(",")
