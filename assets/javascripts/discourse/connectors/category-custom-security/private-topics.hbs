@@ -1,0 +1,30 @@
+{{#if siteSettings.private_topics_enabled}}
+  <section>
+    <h3>{{i18n "category.private_topics.title"}}</h3>
+  </section>
+  <section class="field category_private_topics_enabled">
+    <label>
+      {{input 
+        type="checkbox" 
+        checked=(readonly category.private_topics_enabled)
+        change=(action "onChangeSetting" value="target.checked")
+      }}
+      {{i18n "category.private_topics.enabled"}}
+    </label>
+  </section>
+  {{#if category.private_topics_enabled}}
+    <section class="field">
+      <label>
+        {{i18n "category.private_topics.allowed_groups_description"}}
+      </label>
+      <div class="value">
+        <GroupChooser
+          @content={{this.allGroups}}
+          @value={{this.allowedGroupIds}}
+          @labelProperty="name"
+          @onChange={{action "setAllowedGroups"}}
+        />
+      </div>
+    </section>
+  {{/if}}
+{{/if}}

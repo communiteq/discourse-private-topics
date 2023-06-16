@@ -1,0 +1,7 @@
+en:
+  js:
+    category:
+      private_topics:
+        title: "Private Topics"
+        enabled: "Enable Private Topics for this category"
+        allowed_groups_description: "Topics are visible for the topic starter and for users in the following groups:"
