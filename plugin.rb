@@ -44,7 +44,6 @@ after_initialize do
 
         if SiteSetting.private_topics_enabled
           cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(@guardian.user)
-          Rails.logger.error("Category ids #{cat_ids}")
           unless cat_ids.empty?
             @results.posts.delete_if do |post|
               next false if post&.user&.id == @guardian.user&.id
