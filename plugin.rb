@@ -37,8 +37,32 @@ module ::DiscoursePrivateTopics
 end
 
 after_initialize do
+    # hide posts from search results
+    module PrivateTopicsPatchSearch
+      def execute(readonly_mode: @readonly_mode)
+        super
+
+        if SiteSetting.private_topics_enabled
+          cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(@guardian.user)
+          Rails.logger.error("Category ids #{cat_ids}")
+          unless cat_ids.empty?
+            @results.posts.delete_if do |post|
+              next false if post&.user&.id == @guardian.user&.id
+              post&.topic&.category&.id && cat_ids.include?(post.topic.category&.id)
+            end
+          end
+        end
+
+        @results
+      end
+    end
+
   Site.preloaded_category_custom_fields << 'private_topics_enabled'
   Site.preloaded_category_custom_fields << 'private_topics_allowed_groups'
+
+  class ::Search
+    prepend PrivateTopicsPatchSearch
+  end
 
   TopicQuery.add_custom_filter(:private_topics) do |result, query|
     if SiteSetting.private_topics_enabled
