@@ -56,6 +56,26 @@ after_initialize do
       end
     end
 
+    module ::TopicGuardian
+      alias_method :org_can_see_topic?, :can_see_topic?
+
+      def can_see_topic?(topic, hide_deleted = true)
+        allowed = org_can_see_topic?(topic, hide_deleted)
+        return false unless allowed # false stays false
+
+        if SiteSetting.private_topics_enabled
+          return true unless topic&.category # skip for PM's
+          return true if @user && !@user.anonymous? && topic&.user&.id == @user&.id # topic authors are always good
+          cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(@user)
+          return true if cat_ids.empty?
+
+          return false if cat_ids.include?(topic.category&.id)
+        end
+
+        true
+      end
+    end
+
   Site.preloaded_category_custom_fields << 'private_topics_enabled'
   Site.preloaded_category_custom_fields << 'private_topics_allowed_groups'
 
