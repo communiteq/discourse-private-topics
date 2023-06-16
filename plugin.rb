@@ -97,11 +97,61 @@ after_initialize do
     singleton_class.prepend PrivateTopicsApplyCommonFilters
   end
 
+  # hide topics from user profile -> summary
+  module PrivateTopicsPatchUserSummary
+    def filtered_category_ids
+      @cat_ids ||= DiscoursePrivateTopics.get_filtered_category_ids(@guardian&.user)
+    end
+
+    def topics
+      if SiteSetting.private_topics_enabled && !filtered_category_ids.empty?
+        cat_ids = filtered_category_ids.join(",")
+        if @guardian.user && !@guardian.user.anonymous?
+          return super.where("(topics.category_id NOT IN (#{cat_ids}) OR topics.user_id = #{@guardian.user.id})")
+        else
+          return super.where("topics.category_id NOT IN (#{cat_ids})")
+        end
+      end
+
+      super
+    end
+
+    def replies
+      if SiteSetting.private_topics_enabled && !filtered_category_ids.empty?
+        cat_ids = filtered_category_ids.join(",")
+        if @guardian.user && !@guardian.user.anonymous?
+          return super.where("(topics.category_id NOT IN (#{cat_ids}) OR posts.user_id = #{@guardian.user.id})")
+        else
+          return super.where("topics.category_id NOT IN (#{cat_ids})")
+        end
+      end
+
+      super
+    end
+
+    def links
+      if SiteSetting.private_topics_enabled && !filtered_category_ids.empty?
+        cat_ids = filtered_category_ids.join(",")
+        if @guardian.user && !@guardian.user.anonymous?
+          return super.where("(topics.category_id NOT IN (#{cat_ids}) OR posts.user_id = #{@guardian.user.id})")
+        else
+          return super.where("topics.category_id NOT IN (#{cat_ids})")
+        end
+      end
+
+      super
+    end
+  end
+
   Site.preloaded_category_custom_fields << 'private_topics_enabled'
   Site.preloaded_category_custom_fields << 'private_topics_allowed_groups'
 
   class ::Search
     prepend PrivateTopicsPatchSearch
+  end
+
+  class ::UserSummary
+    prepend PrivateTopicsPatchUserSummary
   end
 
   # hide topics from topic lists
