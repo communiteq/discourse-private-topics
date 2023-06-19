@@ -9,3 +9,6 @@ plugins:
     default: "1"
     allow_any: false
     refresh: true
+  private_topics_admin_sees_all:
+    client: false
+    default: true

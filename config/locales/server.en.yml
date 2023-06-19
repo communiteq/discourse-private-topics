@@ -2,3 +2,4 @@ en:
   site_settings:
     private_topics_enabled: "Enable Private Topics plugin"
     private_topics_permitted_groups: "Always show topics started by a member of these groups"
+    private_topics_admin_sees_all: "Allow admin users to see all topics"
