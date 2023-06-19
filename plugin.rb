@@ -1,12 +1,22 @@
 # name: discourse-private-topics
 # about: Communiteq private topics plugin
-# version: 1.1
+# version: 1.2
 # authors: richard@communiteq.com
 # url: https://github.com/communiteq/discourse-private-topics
 
 enabled_site_setting :private_topics_enabled
 
 module ::DiscoursePrivateTopics
+  # gets a list of user ids we should always show topics for
+  def DiscoursePrivateTopics.get_unfiltered_user_ids(user)
+    user_ids = [ Discourse.system_user.id ]
+    user_ids.append user.id if user
+    group_ids = SiteSetting.private_topics_permitted_groups.split("|").map(&:to_i)
+    user_ids = user_ids + Group.where(id: group_ids).joins(:users).pluck('users.id')
+    user_ids.uniq
+  end
+
+  # gets a list of category ids we should not show topics for (unless the user is unfiltered)
   def DiscoursePrivateTopics.get_filtered_category_ids(user)
     return [] unless SiteSetting.private_topics_enabled
 
@@ -45,8 +55,9 @@ after_initialize do
       if SiteSetting.private_topics_enabled
         cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(@guardian.user)
         unless cat_ids.empty?
+          user_ids = DiscoursePrivateTopics.get_unfiltered_user_ids(@guardian.user)
           @results.posts.delete_if do |post|
-            next false if post&.user&.id == @guardian.user&.id
+            next false if user_ids.include? post&.user&.id
             post&.topic&.category&.id && cat_ids.include?(post.topic.category&.id)
           end
         end
@@ -66,7 +77,10 @@ after_initialize do
 
       if SiteSetting.private_topics_enabled
         return true unless topic&.category # skip for PM's
-        return true if @user && !@user.anonymous? && topic&.user&.id == @user&.id # topic authors are always good
+
+        user_ids = DiscoursePrivateTopics.get_unfiltered_user_ids(@user)
+        return true if user_ids.include?(topic&.user&.id) # topic authors and permitted users are always good
+
         cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(@user)
         return true if cat_ids.empty?
 
@@ -84,11 +98,8 @@ after_initialize do
         if SiteSetting.private_topics_enabled
           cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(guardian.user).join(",")
           unless cat_ids.empty?
-            if guardian.user
-              builder.where("(t.category_id NOT IN (#{cat_ids}) OR p.user_id = #{guardian&.user&.id})")
-            else
-              builder.where("t.category_id NOT IN (#{cat_ids})")
-            end
+            user_ids = DiscoursePrivateTopics.get_unfiltered_user_ids(guardian.user).join(",")
+            builder.where("(t.category_id NOT IN (#{cat_ids}) OR p.user_id IN (#{user_ids}))")
           end
         end
         super(builder, user_id, guardian, ignore_private_messages)
@@ -100,17 +111,16 @@ after_initialize do
   # hide topics from user profile -> summary
   module PrivateTopicsPatchUserSummary
     def filtered_category_ids
-      @cat_ids ||= DiscoursePrivateTopics.get_filtered_category_ids(@guardian&.user)
+      @cat_ids ||= DiscoursePrivateTopics.get_filtered_category_ids(@guardian&.user).join(",")
+    end
+
+    def unfiltered_user_ids
+      @user_ids ||= DiscoursePrivateTopics.get_unfiltered_user_ids(@guardian&.user).join(",")
     end
 
     def topics
       if SiteSetting.private_topics_enabled && !filtered_category_ids.empty?
-        cat_ids = filtered_category_ids.join(",")
-        if @guardian.user && !@guardian.user.anonymous?
-          return super.where("(topics.category_id NOT IN (#{cat_ids}) OR topics.user_id = #{@guardian.user.id})")
-        else
-          return super.where("topics.category_id NOT IN (#{cat_ids})")
-        end
+        return super.where("(topics.category_id NOT IN (#{filtered_category_ids}) OR topics.user_id IN (#{unfiltered_user_ids}))")
       end
 
       super
@@ -118,12 +128,7 @@ after_initialize do
 
     def replies
       if SiteSetting.private_topics_enabled && !filtered_category_ids.empty?
-        cat_ids = filtered_category_ids.join(",")
-        if @guardian.user && !@guardian.user.anonymous?
-          return super.where("(topics.category_id NOT IN (#{cat_ids}) OR posts.user_id = #{@guardian.user.id})")
-        else
-          return super.where("topics.category_id NOT IN (#{cat_ids})")
-        end
+        return super.where("(topics.category_id NOT IN (#{filtered_category_ids}) OR topics.user_id IN (#{unfiltered_user_ids}))")
       end
 
       super
@@ -131,12 +136,7 @@ after_initialize do
 
     def links
       if SiteSetting.private_topics_enabled && !filtered_category_ids.empty?
-        cat_ids = filtered_category_ids.join(",")
-        if @guardian.user && !@guardian.user.anonymous?
-          return super.where("(topics.category_id NOT IN (#{cat_ids}) OR posts.user_id = #{@guardian.user.id})")
-        else
-          return super.where("topics.category_id NOT IN (#{cat_ids})")
-        end
+        return super.where("(topics.category_id NOT IN (#{filtered_category_ids}) OR topics.user_id IN (#{unfiltered_user_ids}))")
       end
 
       super
@@ -156,14 +156,12 @@ after_initialize do
 
   # hide topics from topic lists
   TopicQuery.add_custom_filter(:private_topics) do |result, query|
+
     if SiteSetting.private_topics_enabled
-      cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(query&.user).join(",")
+      cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(query&.guardian&.user).join(",")
       unless cat_ids.empty?
-        if query.user
-          result = result.where("(topics.category_id NOT IN (#{cat_ids}) OR topics.user_id = #{query.user.id})")
-        else
-          result = result.where("topics.category_id NOT IN (#{cat_ids})")
-        end
+        user_ids = DiscoursePrivateTopics.get_unfiltered_user_ids(query&.guardian&.user).join(",")
+        result = result.where("(topics.category_id NOT IN (#{cat_ids}) OR topics.user_id IN (#{user_ids}))")
       end
     end
     result

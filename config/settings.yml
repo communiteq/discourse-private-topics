@@ -2,3 +2,10 @@ plugins:
   private_topics_enabled:
     client: true
     default: false
+  private_topics_permitted_groups:
+    client: false
+    type: group_list
+    list_type: compact
+    default: "1"
+    allow_any: false
+    refresh: true
