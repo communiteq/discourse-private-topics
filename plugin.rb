@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Communiteq private topics plugin
-# version: 1.4a
+# version: 1.4b
 # authors: richard@communiteq.com
 # url: https://github.com/communiteq/discourse-private-topics
 
@@ -10,7 +10,7 @@ module ::DiscoursePrivateTopics
   # gets a list of user ids we should always show topics for
   def DiscoursePrivateTopics.get_unfiltered_user_ids(user)
     user_ids = [ Discourse.system_user.id ]
-    user_ids.append user.id if user && user&.id
+    user_ids.append user.id if user && !user.anonymous?
     group_ids = SiteSetting.private_topics_permitted_groups.split("|").map(&:to_i)
     user_ids = user_ids + Group.where(id: group_ids).joins(:users).pluck('users.id')
     user_ids.uniq
