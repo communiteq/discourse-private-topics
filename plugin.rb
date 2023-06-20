@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Communiteq private topics plugin
-# version: 1.4b
+# version: 1.5
 # authors: richard@communiteq.com
 # url: https://github.com/communiteq/discourse-private-topics
 
@@ -153,6 +153,20 @@ after_initialize do
 
   Site.preloaded_category_custom_fields << 'private_topics_enabled'
   Site.preloaded_category_custom_fields << 'private_topics_allowed_groups'
+
+  # this removes the categories from the "recent topics" shown on the 404 page
+  # called from ApplicationController.build_not_found_page
+  # this is cached without a user so just pass nil and exclude every private category
+  class ::Topic
+    def self.recent(max = 10)
+      cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(nil).join(",")
+      if cat_ids.empty?
+        Topic.listable_topics.visible.secured.order("created_at desc").limit(max)
+      else
+        Topic.listable_topics.visible.secured.where("category_id NOT IN (#{cat_ids})").order("created_at desc").limit(max)
+      end
+    end
+  end
 
   class ::Search
     prepend PrivateTopicsPatchSearch
