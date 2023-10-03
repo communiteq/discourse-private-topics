@@ -1,18 +1,18 @@
-{{#if siteSettings.private_topics_enabled}}
+{{#if this.siteSettings.private_topics_enabled}}
   <section>
     <h3>{{i18n "category.private_topics.title"}}</h3>
   </section>
   <section class="field category_private_topics_enabled">
     <label>
-      {{input 
-        type="checkbox" 
-        checked=(readonly category.private_topics_enabled)
-        change=(action "onChangeSetting" value="target.checked")
-      }}
+      <Input
+        @type="checkbox"
+        @checked={{this.args.outletArgs.category.custom_fields.private_topics_enabled}}
+      />
       {{i18n "category.private_topics.enabled"}}
     </label>
   </section>
-  {{#if category.private_topics_enabled}}
+
+  {{#if this.args.outletArgs.category.custom_fields.private_topics_enabled}}
     <section class="field">
       <label>
         {{i18n "category.private_topics.allowed_groups_description"}}
@@ -20,7 +20,7 @@
       <div class="value">
         <GroupChooser
           @content={{this.allGroups}}
-          @value={{this.allowedGroupIds}}
+          @value={{groupIds}}
           @labelProperty="name"
           @onChange={{action "setAllowedGroups"}}
         />
