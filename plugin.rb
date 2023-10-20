@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Communiteq private topics plugin
-# version: 1.5
+# version: 1.5.1
 # authors: richard@communiteq.com
 # url: https://github.com/communiteq/discourse-private-topics
 
@@ -21,7 +21,7 @@ module ::DiscoursePrivateTopics
     return [] unless SiteSetting.private_topics_enabled
 
     # first get all the categories with private topics enabled
-    cat_ids = CategoryCustomField.where(name: 'private_topics_enabled').where(value: 'true').pluck(:category_id).to_a
+    cat_ids = CategoryCustomField.where(name: 'private_topics_enabled').pluck(:category_id).to_a
     # we need to initialize the hash in case there are categories without whitelisted groups, or if we're anonymous user
     cat_group_map = cat_ids.map { |i| [i, []] }.to_h
 
