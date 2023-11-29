@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Communiteq private topics plugin
-# version: 1.5.1
+# version: 1.5.2
 # authors: richard@communiteq.com
 # url: https://github.com/communiteq/discourse-private-topics
 
@@ -151,6 +151,17 @@ after_initialize do
     end
   end
 
+  module PrivateTopicsDiscourseAiEmbeddingsSemanticSearch
+    def search_for_topics(query, page = 1)
+      if SiteSetting.private_topics_enabled
+        posts = super
+        filtered_posts = posts.reject { |post| !@guardian.can_see_topic?(post.topic) }
+      else
+        super
+      end
+    end
+  end
+
   Site.preloaded_category_custom_fields << 'private_topics_enabled'
   Site.preloaded_category_custom_fields << 'private_topics_allowed_groups'
 
@@ -179,6 +190,12 @@ after_initialize do
   if defined?(Follow::NotificationHandler)
     class ::Follow::NotificationHandler
       prepend PrivateTopicsFollowNotificationHandler
+    end
+  end
+
+  if defined?(DiscourseAi::Embeddings::SemanticSearch)
+    class ::DiscourseAi::Embeddings::SemanticSearch
+      prepend PrivateTopicsDiscourseAiEmbeddingsSemanticSearch
     end
   end
 
