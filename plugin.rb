@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Communiteq private topics plugin
-# version: 1.5.2
+# version: 1.5.3
 # authors: richard@communiteq.com
 # url: https://github.com/communiteq/discourse-private-topics
 
@@ -146,7 +146,7 @@ after_initialize do
   # don't send follow plugin notifications for the entire category (regardless of whether a user can see)
   module PrivateTopicsFollowNotificationHandler
     def handle
-      return if post&.topic&.category&.id && DiscoursePrivateTopics.get_filtered_category_ids.include?(post.topic.category.id)
+      return if post&.topic&.category&.id && DiscoursePrivateTopics.get_filtered_category_ids(nil).include?(post.topic.category.id)
       super
     end
   end
