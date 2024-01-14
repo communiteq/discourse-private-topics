@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Communiteq private topics plugin
-# version: 1.5.3
+# version: 1.5.4
 # authors: richard@communiteq.com
 # url: https://github.com/communiteq/discourse-private-topics
 
