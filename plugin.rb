@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Communiteq private topics plugin
-# version: 1.5.4
+# version: 1.5.5
 # authors: richard@communiteq.com
 # url: https://github.com/communiteq/discourse-private-topics
 
@@ -143,6 +143,12 @@ after_initialize do
     end
   end
 
+  module PrivateTopicsPatchCategoryDetailedSerializer
+    def include_displayable_topics?
+      displayable_topics.present? && custom_fields['private_topics_enabled'] != 't'
+    end
+  end
+
   # don't send follow plugin notifications for the entire category (regardless of whether a user can see)
   module PrivateTopicsFollowNotificationHandler
     def handle
@@ -185,6 +191,10 @@ after_initialize do
 
   class ::UserSummary
     prepend PrivateTopicsPatchUserSummary
+  end
+
+  class ::CategoryDetailedSerializer
+    prepend PrivateTopicsPatchCategoryDetailedSerializer
   end
 
   if defined?(Follow::NotificationHandler)
