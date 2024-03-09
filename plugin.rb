@@ -1,7 +1,8 @@
 # name: discourse-private-topics
-# about: Communiteq private topics plugin
+# about: Allows to keep topics private to the topic creator and specific groups.
 # version: 1.5.5
-# authors: richard@communiteq.com
+# authors: Communiteq
+# meta_topic_id: 268646
 # url: https://github.com/communiteq/discourse-private-topics
 
 enabled_site_setting :private_topics_enabled
