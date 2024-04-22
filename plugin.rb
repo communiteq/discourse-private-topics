@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Allows to keep topics private to the topic creator and specific groups.
-# version: 1.5.5
+# version: 1.5.6
 # authors: Communiteq
 # meta_topic_id: 268646
 # url: https://github.com/communiteq/discourse-private-topics
@@ -182,6 +182,22 @@ after_initialize do
         Topic.listable_topics.visible.secured.order("created_at desc").limit(max)
       else
         Topic.listable_topics.visible.secured.where("category_id NOT IN (#{cat_ids})").order("created_at desc").limit(max)
+      end
+    end
+  end
+
+  class ::Topic
+    class << self
+      alias_method :original_for_digest, :for_digest
+
+      def for_digest(user, since, opts = nil)
+        topics = original_for_digest(user, since, opts)
+        filtered_category_ids ||= DiscoursePrivateTopics.get_filtered_category_ids(user).join(",")
+        if SiteSetting.private_topics_enabled && !(SiteSetting.private_topics_admin_sees_all & user&.admin?) && !filtered_category_ids.empty?
+          unfiltered_user_ids = DiscoursePrivateTopics.get_unfiltered_user_ids(user).join(",")
+          return topics.where("(topics.category_id NOT IN (#{filtered_category_ids}) OR topics.user_id IN (#{unfiltered_user_ids}))")
+        end
+        topics
       end
     end
   end
