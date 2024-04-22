@@ -1,30 +1,44 @@
 import Component from '@glimmer/component';
 import { tracked } from '@glimmer/tracking';
-import { action } from "@ember/object";
+import { action, computed } from "@ember/object";
 import { inject as service } from "@ember/service"
-import Group from "discourse/models/group";
 
 export default class PrivateTopics extends Component {
+  @service site;
   @service siteSettings;
-  @tracked allGroups;
-  @tracked allowedGroupIds = [];
+  @tracked selectedGroups = null;
 
   constructor() {
     super(...arguments);
-    Group.findAll().then((groups) => {
-      this.allGroups = groups;
+    let groupNames = [];
+    let groupIds = (this.args.outletArgs.category.custom_fields.private_topics_allowed_groups || "").split(",").filter(Boolean).map(id => parseInt(id, 10));
+    this.site.groups.forEach((group) => {
+      if (groupIds.includes(parseInt(group.id,10))) {
+        groupNames.push(group.name);
+      }
     });
-    this.allowedGroupIds = this.groupIds;
+    this.selectedGroups = groupNames;
   }
 
-  get groupIds() {
-    var g = this.allowedGroupIds; // necessary to trigger getter rerender
-    let groups = this.args.outletArgs.category.custom_fields.private_topics_allowed_groups || "";
-    return groups.split(',').filter(Boolean).map(Number) || [];
+  @computed("site.groups.[]")
+  get availableGroups() {
+    return (this.site.groups || [])
+      .map((g) => { // don't list "everyone"
+        return g.id === 0 ? null : g.name;
+      })
+      .filter(Boolean);
   }
 
-  @action setAllowedGroups(groupIds) {
+  @action
+  onChangeGroups(groupNames) {
+    this.selectedGroups = groupNames;
+   // let groupNames = values.split(",").filter(Boolean);
+    let groupIds = [];
+    this.site.groups.forEach((group) => {
+      if (groupNames.includes(group.name)) {
+        groupIds.push(group.id);
+      }
+    });
     this.args.outletArgs.category.custom_fields.private_topics_allowed_groups = groupIds.join(',');
-    this.allowedGroupIds = groupIds;
   }
 };

@@ -18,12 +18,13 @@
         {{i18n "category.private_topics.allowed_groups_description"}}
       </label>
       <div class="value">
-        <GroupChooser
-          @content={{this.allGroups}}
-          @value={{groupIds}}
-          @labelProperty="name"
-          @onChange={{action "setAllowedGroups"}}
-        />
+      <GroupChooser
+        @content={{this.availableGroups}}
+        @valueProperty={{null}}
+        @nameProperty={{null}}
+        @value={{this.selectedGroups}}
+        @onChange={{this.onChangeGroups}}
+      />
       </div>
     </section>
   {{/if}}
