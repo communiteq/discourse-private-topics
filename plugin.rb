@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Allows to keep topics private to the topic creator and specific groups.
-# version: 1.5.7
+# version: 1.5.8
 # authors: Communiteq
 # meta_topic_id: 268646
 # url: https://github.com/communiteq/discourse-private-topics
@@ -65,6 +65,16 @@ after_initialize do
       end
 
       @results
+    end
+  end
+
+  module PrivateTopicsPatchPost
+    def self.prepended(base)
+      base.scope :public_posts, -> {
+        base.joins(:topic)
+        .where("topics.archetype <> ?", Archetype.private_message)
+        .where.not("topics.category_id IN (?)", CategoryCustomField.where(name: 'private_topics_enabled').pluck(:category_id).to_a)
+      }
     end
   end
 
@@ -200,6 +210,10 @@ after_initialize do
         topics
       end
     end
+  end
+
+  class ::Post
+    prepend PrivateTopicsPatchPost
   end
 
   class ::Search
