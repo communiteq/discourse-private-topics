@@ -32,7 +32,6 @@ export default class PrivateTopics extends Component {
   @action
   onChangeGroups(groupNames) {
     this.selectedGroups = groupNames;
-   // let groupNames = values.split(",").filter(Boolean);
     let groupIds = [];
     this.site.groups.forEach((group) => {
       if (groupNames.includes(group.name)) {
