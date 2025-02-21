@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Allows to keep topics private to the topic creator and specific groups.
-# version: 1.5.8
+# version: 1.5.9
 # authors: Communiteq
 # meta_topic_id: 268646
 # url: https://github.com/communiteq/discourse-private-topics
@@ -208,6 +208,15 @@ after_initialize do
           return topics.where("(topics.category_id NOT IN (#{filtered_category_ids}) OR topics.user_id IN (#{unfiltered_user_ids}))")
         end
         topics
+      end
+
+      alias_method :original_similar_to, :similar_to
+
+      def similar_to(title, raw, user = nil)
+        similar_topics = original_similar_to(title, raw, user)
+        filtered_category_ids ||= DiscoursePrivateTopics.get_filtered_category_ids(user)
+        filtered_topics = similar_topics.where.not(category_id: filtered_category_ids)
+        filtered_topics = filtered_topics.or(similar_topics.where(user_id: user.id)) if user.present?
       end
     end
   end
