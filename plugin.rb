@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Allows to keep topics private to the topic creator and specific groups.
-# version: 1.5.9
+# version: 1.5.10
 # authors: Communiteq
 # meta_topic_id: 268646
 # url: https://github.com/communiteq/discourse-private-topics
@@ -71,9 +71,13 @@ after_initialize do
   module PrivateTopicsPatchPost
     def self.prepended(base)
       base.scope :public_posts, -> {
-        base.joins(:topic)
-        .where("topics.archetype <> ?", Archetype.private_message)
-        .where.not("topics.category_id IN (?)", CategoryCustomField.where(name: 'private_topics_enabled').pluck(:category_id).to_a)
+        posts = base.joins(:topic).where("topics.archetype <> ?", Archetype.private_message)
+        private_category_ids = CategoryCustomField.where(name: 'private_topics_enabled').pluck(:category_id).to_a
+        if SiteSetting.private_topics_enabled && private_category_ids.any?
+          posts.where.not("topics.category_id IN (?)", private_category_ids)
+        else
+          posts
+        end
       }
     end
   end
@@ -163,7 +167,7 @@ after_initialize do
   # don't send follow plugin notifications for the entire category (regardless of whether a user can see)
   module PrivateTopicsFollowNotificationHandler
     def handle
-      return if post&.topic&.category&.id && DiscoursePrivateTopics.get_filtered_category_ids(nil).include?(post.topic.category.id)
+      return if post&.topic&.category&.id && DiscoursePrivateTopics.get_filtered_category_ids(nil).include?(post.topic.category&.id)
       super
     end
   end
@@ -215,8 +219,12 @@ after_initialize do
       def similar_to(title, raw, user = nil)
         similar_topics = original_similar_to(title, raw, user)
         filtered_category_ids ||= DiscoursePrivateTopics.get_filtered_category_ids(user)
-        filtered_topics = similar_topics.where.not(category_id: filtered_category_ids)
-        filtered_topics = filtered_topics.or(similar_topics.where(user_id: user.id)) if user.present?
+        if SiteSetting.private_topics_enabled && !(SiteSetting.private_topics_admin_sees_all & user&.admin?) && !filtered_category_ids.empty?
+          filtered_topics = similar_topics.where.not(category_id: filtered_category_ids)
+          filtered_topics = filtered_topics.or(similar_topics.where(user_id: user.id)) if user.present?
+          return filtered_topics
+        end
+        similar_topics
       end
     end
   end
