@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Allows to keep topics private to the topic creator and specific groups.
-# version: 1.5.10
+# version: 1.5.11
 # authors: Communiteq
 # meta_topic_id: 268646
 # url: https://github.com/communiteq/discourse-private-topics
@@ -267,5 +267,43 @@ after_initialize do
       end
     end
     result
+  end
+
+  # prevent backlinks to show up in wrong places
+  # https://meta.discourse.org/t/private-topics-plugin/268646/81
+
+  register_modifier(:topic_view_link_counts) do |link_counts|
+    begin
+      if SiteSetting.private_topics_enabled
+        cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(nil)
+        unless cat_ids.empty?
+          # get all topic ids
+          topic_ids = link_counts.values.flatten.map do |link|
+            next unless link.is_a?(Hash) && link[:internal] && link[:url].is_a?(String)
+            match = link[:url].match(%r{/t/[^/]+/(\d+)(?:/\d+)?})
+            match[1].to_i if match
+          end.compact.uniq
+
+          # get all categories for these topics
+          topic_category_map = Topic.where(id: topic_ids).pluck(:id, :category_id).to_h
+
+          # filter the links
+          link_counts.each do |post_id, links|
+            link_counts[post_id] = links.reject do |link|
+              next false unless link.is_a?(Hash) && link[:internal] && link[:url].is_a?(String)
+              match = link[:url].match(%r{/t/[^/]+/(\d+)(?:/\d+)?})
+              next false unless match
+              topic_id = match[1].to_i
+              cat_ids.include?(topic_category_map[topic_id])
+            end
+          end
+          # remove any empty entries
+          link_counts.delete_if { |_post_id, links| !links.is_a?(Array) || links.empty? }
+        end
+      end
+    rescue => e
+      Rails.logger.warn("topic_view_link_counts modifier failed: #{e.class} - #{e.message}")
+    end
+    link_counts
   end
 end
