@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Allows to keep topics private to the topic creator and specific groups.
-# version: 1.5.11
+# version: 1.5.12
 # authors: Communiteq
 # meta_topic_id: 268646
 # url: https://github.com/communiteq/discourse-private-topics
@@ -183,6 +183,48 @@ after_initialize do
     end
   end
 
+  module PrivateTopicsDiscourseSolvedSolvedTopicsController
+    def by_user
+      return super unless SiteSetting.private_topics_enabled && !(SiteSetting.private_topics_admin_sees_all & current_user&.admin?)
+
+      # copied straight from DiscourseSolved::SolvedTopicsController#by_user
+      # with the addition of the private topics filtering in the where clause (marked ***)
+
+      params.require(:username)
+      user =
+        fetch_user_from_params(
+          include_inactive:
+            current_user.try(:staff?) || (current_user && SiteSetting.show_inactive_accounts),
+        )
+      raise Discourse::NotFound unless guardian.public_can_see_profiles?
+      raise Discourse::NotFound unless guardian.can_see_profile?(user)
+
+      offset = [0, params[:offset].to_i].max
+      limit = params.fetch(:limit, 30).to_i
+
+      filtered_category_ids = guardian.secure_category_ids - DiscoursePrivateTopics.get_filtered_category_ids(current_user)
+      posts =
+        Post
+          .joins(
+            "INNER JOIN discourse_solved_solved_topics ON discourse_solved_solved_topics.answer_post_id = posts.id",
+          )
+          .joins(:topic)
+          .joins("LEFT JOIN categories ON categories.id = topics.category_id")
+          .where(user_id: user.id, deleted_at: nil)
+          .where(topics: { archetype: Archetype.default, deleted_at: nil })
+          .where(
+            "topics.category_id IS NULL OR NOT categories.read_restricted OR topics.category_id IN (:secure_category_ids)",
+            secure_category_ids: filtered_category_ids, # *** filter out private topics
+          )
+          .includes(:user, topic: %i[category tags])
+          .order("discourse_solved_solved_topics.created_at DESC")
+          .offset(offset)
+          .limit(limit)
+
+      render_serialized(posts, DiscourseSolved::SolvedPostSerializer, root: "user_solved_posts")
+    end
+  end
+
   Site.preloaded_category_custom_fields << 'private_topics_enabled'
   Site.preloaded_category_custom_fields << 'private_topics_allowed_groups'
 
@@ -254,6 +296,12 @@ after_initialize do
   if defined?(DiscourseAi::Embeddings::SemanticSearch)
     class ::DiscourseAi::Embeddings::SemanticSearch
       prepend PrivateTopicsDiscourseAiEmbeddingsSemanticSearch
+    end
+  end
+
+  if defined?(DiscourseSolved::SolvedTopicsController)
+    class ::DiscourseSolved::SolvedTopicsController
+      prepend PrivateTopicsDiscourseSolvedSolvedTopicsController
     end
   end
 
