@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Allows to keep topics private to the topic creator and specific groups.
-# version: 1.5.12
+# version: 1.5.13
 # authors: Communiteq
 # meta_topic_id: 268646
 # url: https://github.com/communiteq/discourse-private-topics
@@ -173,7 +173,7 @@ after_initialize do
   end
 
   module PrivateTopicsDiscourseAiEmbeddingsSemanticSearch
-    def search_for_topics(query, page = 1)
+    def search_for_topics(query, page = 1, hyde: true)
       if SiteSetting.private_topics_enabled
         posts = super
         filtered_posts = posts.reject { |post| !@guardian.can_see_topic?(post.topic) }
