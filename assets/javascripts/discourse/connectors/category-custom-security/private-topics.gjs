@@ -47,10 +47,17 @@ export default class PrivateTopics extends Component {
   }
 
   get showWarning() {
-    if (this.args.outletArgs.category.custom_fields.private_topics_enabled !== true) {
-      return false;
+    if (this.args.outletArgs.category.custom_fields.private_topics_enabled) {
+      var everyoneName = 'everyone';
+      this.site.groups.forEach((g) => {
+        if (g.id === 0) {
+          everyoneName = g.name;
+        }
+      });
+      return this.permissions.some(permission => permission.group_name === everyoneName);
     }
-    return this.permissions.some(permission => permission.group_name === "everyone");
+
+    return false;
   }
 
   <template>
