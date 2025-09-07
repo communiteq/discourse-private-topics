@@ -5,3 +5,4 @@ en:
         title: "Private Topics"
         enabled: "Enable Private Topics for this category"
         allowed_groups_description: "Topics are visible for the topic starter and for users in the following groups:"
+        warning: "<b>Warning</b>: The 'everyone' group has access to this category. This will override the private topics setting and topics will not be private. Please remove 'everyone' and add 'trust_level_0' instead."
