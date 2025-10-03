@@ -1,15 +1,16 @@
 import Component from '@glimmer/component';
 import { tracked } from '@glimmer/tracking';
-import { action, computed } from "@ember/object";
-import { inject as service } from "@ember/service"
 import { Input } from "@ember/component";
+import { action, computed } from "@ember/object";
+import { service } from "@ember/service";
 import { htmlSafe } from "@ember/template";
-import GroupChooser from "select-kit/components/group-chooser";
 import { i18n } from "discourse-i18n";
+import GroupChooser from "select-kit/components/group-chooser";
 
 export default class PrivateTopics extends Component {
   @service site;
   @service siteSettings;
+
   @tracked selectedGroups = null;
   @tracked permissions = this.args.outletArgs.category.permissions;
 
@@ -48,7 +49,7 @@ export default class PrivateTopics extends Component {
 
   get showWarning() {
     if (this.args.outletArgs.category.custom_fields.private_topics_enabled) {
-      var everyoneName = 'everyone';
+      let everyoneName = 'everyone';
       this.site.groups.forEach((g) => {
         if (g.id === 0) {
           everyoneName = g.name;
