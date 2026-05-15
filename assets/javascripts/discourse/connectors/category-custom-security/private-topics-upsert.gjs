@@ -19,6 +19,10 @@ export default class PrivateTopicsUpsert extends Component {
   @tracked selectedGroups = null;
   @tracked permissions = this.args.outletArgs.category.permissions || [];
 
+  isEnabledValue(value) {
+    return value === "t" || value === true || value === "true";
+  }
+
   get privateTopicsEnabled() {
     return this.privateTopicsEnabledState;
   }
@@ -27,8 +31,14 @@ export default class PrivateTopicsUpsert extends Component {
     super(...arguments);
 
     this.privateTopicsEnabledState =
-      this.args.outletArgs.category.custom_fields?.private_topics_enabled ===
-      "t";
+      this.isEnabledValue(
+        this.args.outletArgs.category.custom_fields?.private_topics_enabled
+      );
+
+    if (this.args.outletArgs.category.custom_fields) {
+      this.args.outletArgs.category.custom_fields.private_topics_enabled =
+        this.privateTopicsEnabledState ? "t" : "";
+    }
 
     // Initialize selectedGroups from custom_fields
     let groupNames = [];
