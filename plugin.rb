@@ -206,7 +206,8 @@ after_initialize do
       posts =
         Post
           .joins(
-            "INNER JOIN discourse_solved_solved_topics ON discourse_solved_solved_topics.answer_post_id = posts.id",
+            "INNER JOIN discourse_solved_topic_answers ON discourse_solved_topic_answers.answer_post_id = posts.id",
+            "INNER JOIN discourse_solved_solved_topics ON discourse_solved_solved_topics.id = discourse_solved_topic_answers.solved_topic_id",
           )
           .joins(:topic)
           .joins("LEFT JOIN categories ON categories.id = topics.category_id")
@@ -217,7 +218,7 @@ after_initialize do
             secure_category_ids: filtered_category_ids, # *** filter out private topics
           )
           .includes(:user, topic: %i[category tags])
-          .order("discourse_solved_solved_topics.created_at DESC")
+          .order("discourse_solved_topic_answers.created_at DESC")
           .offset(offset)
           .limit(limit)
 
