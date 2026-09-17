@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Allows to keep topics private to the topic creator and specific groups.
-# version: 2026.4
+# version: 2026.7.0
 # authors: Communiteq
 # meta_topic_id: 268646
 # url: https://github.com/communiteq/discourse-private-topics
@@ -8,6 +8,22 @@
 enabled_site_setting :private_topics_enabled
 
 module ::DiscoursePrivateTopics
+  # The `private_topics_enabled` category custom field is a *text* column, and the
+  # value arrives in more than one shape depending on who wrote it:
+  #
+  #   "t"     - what this plugin's own admin UI writes (both connectors, see
+  #             assets/javascripts/discourse/connectors/category-custom-security)
+  #   "true"  - what the API, the console or a hand-written fixture tends to use
+  #   true    - a real boolean, for categories set up in memory
+  #
+  # The frontend already accepts all three (the connectors' `isEnabledValue`), so
+  # the server has to accept all three as well. Keep the two lists in sync.
+  PRIVATE_TOPICS_ENABLED_VALUES = [true, "t", "true"].freeze
+
+  def DiscoursePrivateTopics.enabled_value?(value)
+    PRIVATE_TOPICS_ENABLED_VALUES.include?(value)
+  end
+
   # gets a list of user ids we should always show topics for
   def DiscoursePrivateTopics.get_unfiltered_user_ids(user)
     user_ids = [ Discourse.system_user.id ]
@@ -159,8 +175,11 @@ after_initialize do
   end
 
   module PrivateTopicsPatchCategoryDetailedSerializer
+    # `custom_fields` is `object.preloaded_custom_fields`, which is nil when the
+    # serializer is used outside the controller path, hence the safe navigation.
     def include_displayable_topics?
-      displayable_topics.present? && custom_fields['private_topics_enabled'] != 't'
+      displayable_topics.present? &&
+        !DiscoursePrivateTopics.enabled_value?(custom_fields&.[]("private_topics_enabled"))
     end
   end
 
