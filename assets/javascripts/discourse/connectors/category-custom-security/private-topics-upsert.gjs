@@ -125,6 +125,7 @@ export default class PrivateTopicsUpsert extends Component {
               @title={{i18n "category.private_topics.enabled"}}
               @onSet={{this.onTogglePrivateTopicsEnabled}}
               @type="checkbox"
+              @format="max"
               as |field|
             >
               <field.Control checked={{this.privateTopicsEnabled}} />
