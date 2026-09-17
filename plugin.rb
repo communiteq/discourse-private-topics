@@ -1,6 +1,6 @@
 # name: discourse-private-topics
 # about: Allows to keep topics private to the topic creator and specific groups.
-# version: 2026.7.0
+# version: 2026.7.1
 # authors: Communiteq
 # meta_topic_id: 268646
 # url: https://github.com/communiteq/discourse-private-topics
@@ -98,12 +98,35 @@ after_initialize do
     end
   end
 
-  # hide topics on from post stream and raw
-  module ::TopicGuardian
-    alias_method :org_can_see_topic?, :can_see_topic?
-
+  # Hide topics from the post stream, raw access, and anything else that asks the
+  # guardian whether a topic may be seen.
+  #
+  # WHY THIS IS A PREPENDED MODULE AND NOT AN alias_method
+  #
+  # This patch used to be:
+  #
+  #   module ::TopicGuardian
+  #     alias_method :org_can_see_topic?, :can_see_topic?
+  #     def can_see_topic?(topic, hide_deleted = true)
+  #       allowed = org_can_see_topic?(topic, hide_deleted)
+  #
+  # `alias_method` copies whichever implementation is *first* in TopicGuardian's
+  # ancestors at that moment. Any plugin that has already prepended to
+  # TopicGuardian therefore gets copied instead of core - and because an aliased
+  # method keeps the `super` of the site where it was originally defined, the two
+  # patches end up calling each other until the stack overflows. Which of them
+  # wins depends on plugin load order: with discourse-pm-scanner installed, every
+  # can_see_topic? call raised SystemStackError.
+  #
+  # Prepending states the position explicitly: this version runs first, `super`
+  # reaches the next patch or core, nothing is copied, and re-prepending on a code
+  # reload cannot stack copies up.
+  #
+  # spec/lib/patch_integrity_spec.rb guards this, including a regression test that
+  # prepends another module to TopicGuardian the way another plugin would.
+  module PrivateTopicsTopicGuardian
     def can_see_topic?(topic, hide_deleted = true)
-      allowed = org_can_see_topic?(topic, hide_deleted)
+      allowed = super
       return false unless allowed # false stays false
 
       if SiteSetting.private_topics_enabled && !(SiteSetting.private_topics_admin_sees_all & @user&.admin?)
@@ -121,6 +144,8 @@ after_initialize do
       true
     end
   end
+
+  ::TopicGuardian.prepend(PrivateTopicsTopicGuardian)
 
   # hide topics from user profile -> activity
   class ::UserAction
@@ -247,48 +272,54 @@ after_initialize do
   Site.preloaded_category_custom_fields << 'private_topics_enabled'
   Site.preloaded_category_custom_fields << 'private_topics_allowed_groups'
 
-  # this removes the categories from the "recent topics" shown on the 404 page
-  # called from ApplicationController.build_not_found_page
-  # this is cached without a user so just pass nil and exclude every private category
-  class ::Topic
-    def self.recent(max = 10)
+  # `Topic.for_digest`, `Topic.similar_to` and `Topic.recent` are class methods, so
+  # one module is prepended onto the singleton class.
+  #
+  # All three used to avoid `super`: two of them copied core with `alias_method`
+  # (`original_for_digest_private_topics`, `original_similar_to`) and `recent` was
+  # replaced outright by a copy of core's own two lines. The copies have the same
+  # load-order problem as PrivateTopicsTopicGuardian above, and the outright
+  # replacement meant core - or any other plugin - could never contribute to
+  # `recent` again.
+  module PrivateTopicsTopicClassMethods
+    def for_digest(user, since, opts = nil)
+      topics = super
+      filtered_category_ids = DiscoursePrivateTopics.get_filtered_category_ids(user).join(",")
+
+      if SiteSetting.private_topics_enabled && !(SiteSetting.private_topics_admin_sees_all & user&.admin?) && !filtered_category_ids.empty?
+        unfiltered_user_ids = DiscoursePrivateTopics.get_unfiltered_user_ids(user).join(",")
+        return topics.where("(topics.category_id NOT IN (#{filtered_category_ids}) OR topics.user_id IN (#{unfiltered_user_ids}))")
+      end
+
+      topics
+    end
+
+    def similar_to(title, raw, user = nil)
+      similar_topics = super
+      filtered_category_ids = DiscoursePrivateTopics.get_filtered_category_ids(user)
+
+      if SiteSetting.private_topics_enabled && !(SiteSetting.private_topics_admin_sees_all & user&.admin?) && !filtered_category_ids.empty?
+        filtered_topics = similar_topics.where.not(category_id: filtered_category_ids)
+        filtered_topics = filtered_topics.or(similar_topics.where(user_id: user.id)) if user.present?
+        return filtered_topics
+      end
+
+      similar_topics
+    end
+
+    # Removes the categories from the "recent topics" shown on the 404 page, which
+    # is built by ApplicationController#build_not_found_page. That page is cached
+    # without a user, so pass nil and exclude every private category.
+    def recent(max = 10)
+      topics = super
       cat_ids = DiscoursePrivateTopics.get_filtered_category_ids(nil).join(",")
-      if cat_ids.empty?
-        Topic.listable_topics.visible.secured.order("created_at desc").limit(max)
-      else
-        Topic.listable_topics.visible.secured.where("category_id NOT IN (#{cat_ids})").order("created_at desc").limit(max)
-      end
+      return topics if cat_ids.empty?
+
+      topics.where("category_id NOT IN (#{cat_ids})")
     end
   end
 
-  class ::Topic
-    class << self
-      alias_method :original_for_digest_private_topics, :for_digest
-
-      def for_digest(user, since, opts = nil)
-        topics = original_for_digest_private_topics(user, since, opts)
-        filtered_category_ids ||= DiscoursePrivateTopics.get_filtered_category_ids(user).join(",")
-        if SiteSetting.private_topics_enabled && !(SiteSetting.private_topics_admin_sees_all & user&.admin?) && !filtered_category_ids.empty?
-          unfiltered_user_ids = DiscoursePrivateTopics.get_unfiltered_user_ids(user).join(",")
-          return topics.where("(topics.category_id NOT IN (#{filtered_category_ids}) OR topics.user_id IN (#{unfiltered_user_ids}))")
-        end
-        topics
-      end
-
-      alias_method :original_similar_to, :similar_to
-
-      def similar_to(title, raw, user = nil)
-        similar_topics = original_similar_to(title, raw, user)
-        filtered_category_ids ||= DiscoursePrivateTopics.get_filtered_category_ids(user)
-        if SiteSetting.private_topics_enabled && !(SiteSetting.private_topics_admin_sees_all & user&.admin?) && !filtered_category_ids.empty?
-          filtered_topics = similar_topics.where.not(category_id: filtered_category_ids)
-          filtered_topics = filtered_topics.or(similar_topics.where(user_id: user.id)) if user.present?
-          return filtered_topics
-        end
-        similar_topics
-      end
-    end
-  end
+  ::Topic.singleton_class.prepend(PrivateTopicsTopicClassMethods)
 
   class ::Post
     prepend PrivateTopicsPatchPost
