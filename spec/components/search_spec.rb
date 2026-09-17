@@ -58,6 +58,48 @@ describe Search do
       expect(TopicQuery.new(admin_user, category: private_category.id).list_latest.topics.size).to eq(0)
       expect(Search.execute("FooBar", guardian: Guardian.new(admin_user)).posts.length).to eq(0)
     end
+
+    it "does not filter anything while the plugin is disabled" do
+      topic = Fabricate(:topic, category: private_category, user: regular_user_1)
+      post = Fabricate(:post, topic: topic, raw: "Support post GammaDelta", user: regular_user_1)
+
+      SiteSetting.private_topics_enabled = false
+
+      expect(Search.execute("GammaDelta", guardian: Guardian.new(regular_user_2)).posts).to include(post)
+    end
+
+    it "shows a private topic whose author is in private_topics_permitted_groups" do
+      permitted = Fabricate(:group)
+      permitted.add(regular_user_1)
+      SiteSetting.private_topics_permitted_groups = permitted.id.to_s
+
+      own = Fabricate(:topic, category: private_category, user: regular_user_1)
+      own_post = Fabricate(:post, topic: own, raw: "Support post EpsilonZeta", user: regular_user_1)
+      other = Fabricate(:topic, category: private_category, user: Fabricate(:user))
+      other_post = Fabricate(:post, topic: other, raw: "Support post EtaTheta", user: other.user)
+
+      results = Search.execute("post", guardian: Guardian.new(regular_user_2)).posts
+
+      expect(results).to include(own_post)
+      expect(results).not_to include(other_post)
+    end
+
+    it "hides private categories from an anonymous visitor" do
+      topic = Fabricate(:topic, category: private_category, user: regular_user_1)
+      post = Fabricate(:post, topic: topic, raw: "Support post IotaKappa", user: regular_user_1)
+      public_post =
+        Fabricate(
+          :post,
+          topic: Fabricate(:topic, category: regular_category, user: regular_user_1),
+          raw: "Support post LambdaMu",
+          user: regular_user_1,
+        )
+
+      results = Search.execute("post", guardian: Guardian.new).posts
+
+      expect(results).to include(public_post)
+      expect(results).not_to include(post)
+    end
   end
 
 end
